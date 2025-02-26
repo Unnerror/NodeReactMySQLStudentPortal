@@ -16,6 +16,8 @@ NodeReactMySQLStudentPortal is a web application designed for students and teach
 - **Security**: Password hashing (bcrypt), SQL injection testing
 - **Hosting**: AWS
 
+This project is part of a **proof-of-concept** implementation to compare different web development stacks while incorporating **cybersecurity** best practices.
+
 ## Installation
 1. Clone the repository:
    ```bash
