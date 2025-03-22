@@ -1,0 +1,9 @@
+brew services start mysql
+
+cd backend
+npx nodemon server.js
+
+/* node server.js */
+
+cd frontend
+npm start
