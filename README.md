@@ -13,10 +13,10 @@ This project is part of a **proof-of-concept** implementation to compare differe
 - **Frontend**: Developed using **React.js** for a responsive and dynamic user experience.
 
 ## Tech Stack
-- **Backend**: Node.js (Express.js), MySQL (AWS RDS)
+- **Backend**: Node.js (Express.js), MySQL
 - **Frontend**: React.js
 - **Security**: Password hashing (bcrypt), SQL injection testing
-- **Hosting**: AWS
+<!--- **Hosting**: AWS-->
 
 ## Installation
 1. Clone the repository:
