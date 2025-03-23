@@ -1,10 +1,10 @@
 import React, { useState } from "react";
-import {Link, useNavigate} from "react-router-dom"; // Import useNavigate
+import { Link, useNavigate } from "react-router-dom";
 
 const Login = () => {
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
-    const navigate = useNavigate(); // Initialize navigation hook
+    const navigate = useNavigate();
 
     const handleLogin = async (e) => {
         e.preventDefault();
@@ -17,9 +17,10 @@ const Login = () => {
             });
 
             const data = await response.json();
+
             if (response.ok) {
-                alert("Login Successful: Welcome back!");
-                navigate("/dashboard"); // Redirect to dashboard
+                // ✅ Redirect to 2FA after successful password login
+                navigate("/two-factor", { state: { userId: data.userId } });
             } else {
                 alert("Login Failed: " + data.error);
             }
@@ -61,11 +62,21 @@ const Login = () => {
                         Login
                     </button>
                     <p className="mt-2 text-left">
-                        or <Link to="/register" className="link-secondary link-offset-2 link-underline-opacity-25 link-underline-opacity-50-hover">
-                        create</Link> account
+                        or{" "}
+                        <Link
+                            to="/register"
+                            className="link-secondary link-offset-2 link-underline-opacity-25 link-underline-opacity-50-hover"
+                        >
+                            create
+                        </Link>{" "}
+                        account
                     </p>
-                   <Link to="/forgot-password" className="link-secondary link-offset-2 link-underline-opacity-0 link-underline-opacity-25-hover">
-                       Forgot password?</Link>
+                    <Link
+                        to="/forgot-password"
+                        className="link-secondary link-offset-2 link-underline-opacity-0 link-underline-opacity-25-hover"
+                    >
+                        Forgot password?
+                    </Link>
                 </form>
             </div>
         </div>

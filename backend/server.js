@@ -81,39 +81,125 @@ app.post("/register", async (req, res) => {
     });
 });
 
-// ✅ Login
-app.post("/login", (req, res) => {
+// ✅ Login with 2FA Email Code
+app.post("/login", async (req, res) => {
     const { email, password } = req.body;
 
-    // 🚨 Reject input that is not a valid email format
-    if (!isValidEmail(email)) {
-        return res.status(400).json({ error: "Invalid email format" });
+    try {
+        // 1️⃣ Verify user
+        db.query("SELECT * FROM users WHERE email = ?", [email], async (err, result) => {
+            if (err) return res.status(500).json({ error: "Database error" });
+            if (result.length === 0) return res.status(401).json({ error: "Invalid email or password" });
+
+            const user = result[0];
+
+            // 2️⃣ Verify password
+            const isMatch = await bcrypt.compare(password, user.password_hash);
+            if (!isMatch) return res.status(401).json({ error: "Invalid email or password" });
+
+            // 3️⃣ Generate 2FA Code
+            const twoFactorCode = Math.floor(100000 + Math.random() * 900000).toString();
+            const twoFactorExpires = new Date(Date.now() + 10 * 60 * 1000); // 10 mins
+
+            // 4️⃣ Save 2FA Code in DB
+            db.query(
+                "UPDATE users SET two_factor_code = ?, two_factor_expires = ? WHERE id = ?",
+                [twoFactorCode, twoFactorExpires, user.id],
+                (err, result) => {
+                    if (err) return res.status(500).json({ error: "Database error updating 2FA" });
+
+                    // 5️⃣ ✅ Respond Immediately!
+                    res.status(200).json({ message: "2FA code generated", userId: user.id });
+
+                    // 6️⃣ ✅ Send email AFTER response
+                    transporter.sendMail({
+                        from: process.env.EMAIL_USER,
+                        to: email,
+                        subject: "Your 2FA Login Code",
+                        html: `<p>Your login verification code is: <strong>${twoFactorCode}</strong></p>`
+                    }, (error, info) => {
+                        if (error) {
+                            console.error("❌ Error sending 2FA email:", error);
+                        } else {
+                            console.log("✅ 2FA email sent:", info.response);
+                        }
+                    });
+                }
+            );
+        });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: "Server error" });
     }
+});
+/*app.post("/login", (req, res) => {
+    const { email, password } = req.body;
 
-    console.log("🔍 Secure Mode:", secure);
-    console.log("🔍 Query:", secure
-        ? "SELECT * FROM users WHERE email = ?"
-        : `SELECT * FROM users WHERE email = '${email}'`
-    );
-
-    const query = secure
-        ? "SELECT * FROM users WHERE email = ?"  // ✅ SECURE Query
-        : `SELECT * FROM users WHERE email = '${email}'`;  // ❌ VULNERABLE Query
-
-    db.query(query, secure ? [email] : [], async (err, result) => {
+    db.query("SELECT * FROM users WHERE email = ?", [email], async (err, result) => {
         if (err) return res.status(500).json({ error: "Database error" });
         if (result.length === 0) return res.status(401).json({ error: "Invalid email or password" });
 
         const user = result[0];
 
-        try {
-            const isMatch = await bcrypt.compare(password, user.password_hash);
-            if (!isMatch) return res.status(401).json({ error: "Invalid email or password" });
+        const isMatch = await bcrypt.compare(password, user.password_hash);
+        if (!isMatch) return res.status(401).json({ error: "Invalid email or password" });
 
-            res.status(200).json({ message: "Login successful", safeMode: secure });
+        // Step 2: Generate 6-digit OTP
+        const verificationCode = Math.floor(100000 + Math.random() * 900000); // 6 digits
+        const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // expires in 10 mins
 
-        } catch (error) {
-            res.status(500).json({ error: "Server error" });
+        // Step 3: Save OTP & expiry in DB (You can also use a `user_verification_codes` table)
+        db.query(
+            "UPDATE users SET two_factor_code = ?, two_factor_expires = ? WHERE id = ?",
+            [verificationCode, expiresAt, user.id],
+            (err) => {
+                if (err) return res.status(500).json({ error: "Database error updating 2FA" });
+
+                // Step 4: Send the OTP via email
+                transporter.sendMail({
+                    from: process.env.EMAIL_USER,
+                    to: email,
+                    subject: "Your 2FA Login Code",
+                    text: `Your login verification code is: ${verificationCode}`
+                }, (error, info) => {
+                    if (error) {
+                        console.error("Error sending 2FA email:", error);
+                        return res.status(500).json({ message: "Failed to send verification email" });
+                    }
+
+                    res.json({ message: "Verification code sent to your email.", userId: user.id });
+                });
+            }
+        );
+    });
+});
+*/
+
+// ✅ Verify 2FA
+app.post("/verify-2fa", (req, res) => {
+    const { userId, code } = req.body;
+
+    db.query("SELECT * FROM users WHERE id = ?", [userId], (err, result) => {
+        if (err) return res.status(500).json({ error: "Database error" });
+        if (result.length === 0) return res.status(404).json({ error: "User not found" });
+
+        const user = result[0];
+
+        const currentTime = new Date();
+
+        if (
+            user.two_factor_code === code &&
+            currentTime <= user.two_factor_expires
+        ) {
+            // ✅ 2FA Success. Clear the code and log them in.
+            db.query(
+                "UPDATE users SET two_factor_code = NULL, two_factor_expires = NULL WHERE id = ?",
+                [userId]
+            );
+
+            res.json({ message: "2FA verified. Login successful!" });
+        } else {
+            res.status(400).json({ error: "Invalid or expired verification code." });
         }
     });
 });
@@ -226,4 +312,3 @@ const PORT = process.env.PORT || 3001;
 https.createServer(sslOptions, app).listen(3443, () => {
     console.log('✅ HTTPS Server running on https://localhost:3443');
 });
-

@@ -7,6 +7,7 @@ import Register from "./components/Register";
 import Dashboard from "./components/Dashboard";
 import ForgotPassword from "./components/ForgotPassword";
 import ResetPassword from "./components/ResetPassword";
+import TwoFactor from "./components/TwoFactor";
 
 // Create a wrapper to use hooks like useLocation in App.js
 const AppWrapper = () => {
@@ -44,6 +45,7 @@ const App = () => {
 
             <Routes>
                 <Route path="/login" element={<Login />} />
+                <Route path="/two-factor" element={<TwoFactor />} />
                 <Route path="/register" element={<Register />} />
                 <Route path="/dashboard" element={<Dashboard />} />
                 <Route path="/forgot-password" element={<ForgotPassword />} />
