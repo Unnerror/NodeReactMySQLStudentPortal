@@ -1,7 +1,7 @@
 require("dotenv").config();
 
-const secure = true;
-
+const https = require('https');
+const fs = require('fs');
 const express = require("express");
 const cors = require("cors");
 const bcrypt = require("bcryptjs");
@@ -9,6 +9,9 @@ const nodemailer = require('nodemailer');
 const { v4: uuidv4 } = require('uuid');
 
 const db = require("./db");
+
+const secure = true;
+
 const transporter = nodemailer.createTransport({
     service: 'gmail',
     auth: {
@@ -17,11 +20,21 @@ const transporter = nodemailer.createTransport({
     }
 });
 
-const isValidEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email); // email regex
+const sslOptions = {
+    key: fs.readFileSync('./ssl/server.key'),
+    cert: fs.readFileSync('./ssl/server.cert'),
+};
 
 const app = express();
+
 app.use(cors());
-app.use(express.json()); // Middleware for parsing JSON
+app.use(express.json());
+
+// ✅ Validating email format from input
+const isValidEmail = (email) => {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return emailRegex.test(email);
+};
 
 // Testing email sender
 /*
@@ -73,10 +86,10 @@ app.post("/login", (req, res) => {
     const { email, password } = req.body;
 
     // 🚨 Reject input that is not a valid email format
-/*    if (!isValidEmail(email)) {
+    if (!isValidEmail(email)) {
         return res.status(400).json({ error: "Invalid email format" });
     }
-*/
+
     console.log("🔍 Secure Mode:", secure);
     console.log("🔍 Query:", secure
         ? "SELECT * FROM users WHERE email = ?"
@@ -110,38 +123,42 @@ app.post("/forgot-password", async (req, res) => {
     const { email } = req.body;
 
     try {
-        // Find user by email
+        // Step 1: Find user by email
         db.query("SELECT * FROM users WHERE email = ?", [email], async (err, result) => {
             if (err) return res.status(500).json({ error: "Database error" });
             if (result.length === 0) return res.status(404).json({ message: "User not found" });
 
             const userId = result[0].id;
 
-            // Generate token and expiry
+            // Step 2: Generate token and expiry
             const resetToken = uuidv4();
             const resetTokenExpires = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
 
-            // Save token in DB
+            // Step 3: Save token in DB
             db.query(
                 `INSERT INTO password_reset_tokens (user_id, reset_token, reset_token_expires) VALUES (?, ?, ?)`,
                 [userId, resetToken, resetTokenExpires],
                 (err, result) => {
                     if (err) return res.status(500).json({ error: "Database error saving token" });
 
-                    // Send reset email
-                    const resetUrl = `http://localhost:3000/reset-password?token=${resetToken}`;
+                    // ✅ Step 4: Send immediate response to client!
+                    res.json({ message: "Password reset link is being sent to your email!" });
+
+                    // Step 5: Send the email in the background (non-blocking)
+                    const resetUrl = `https://localhost:3000/reset-password?token=${resetToken}`;
+
                     transporter.sendMail({
                         from: 'your_email@gmail.com',
                         to: email,
                         subject: 'Password Reset',
                         html: `<p>You requested a password reset</p>
-                               <p>Click <a href="${resetUrl}">here</a> to reset your password. This link expires in 1 hour.</p>`
+                   <p>Click <a href="${resetUrl}">here</a> to reset your password. This link expires in 1 hour.</p>`
                     }, (error, info) => {
                         if (error) {
-                            console.error(error);
-                            return res.status(500).json({ message: "Failed to send email" });
+                            console.error("❌ Failed to send email:", error);
+                        } else {
+                            console.log("✅ Password reset email sent:", info.response);
                         }
-                        res.json({ message: "Password reset link sent to your email!" });
                     });
                 }
             );
@@ -206,8 +223,7 @@ app.post("/reset-password", async (req, res) => {
 // Start Server
 const PORT = process.env.PORT || 3001;
 
-//app.listen(PORT, "localhost", () => console.log(`✅ Server running on port ${PORT}`));
-app.listen(PORT, "0.0.0.0", () => console.log(`✅ Server running on port ${PORT}`));
-
-
+https.createServer(sslOptions, app).listen(3443, () => {
+    console.log('✅ HTTPS Server running on https://localhost:3443');
+});
 

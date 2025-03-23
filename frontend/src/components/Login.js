@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { useNavigate } from "react-router-dom"; // Import useNavigate
+import {Link, useNavigate} from "react-router-dom"; // Import useNavigate
 
 const Login = () => {
     const [email, setEmail] = useState("");
@@ -10,7 +10,7 @@ const Login = () => {
         e.preventDefault();
 
         try {
-            const response = await fetch("http://localhost:3001/login", {
+            const response = await fetch("https://localhost:3443/login", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ email, password }),
@@ -31,6 +31,7 @@ const Login = () => {
 
     return (
         <div className="d-flex align-items-center justify-content-center min-vh-100 bg-light">
+            <h1 className="position-absolute top-0 start-50 translate-middle-x mt-5">Student Portal</h1>
             <div className="card p-4 shadow" style={{ width: "400px" }}>
                 <h2 className="text-center">Login</h2>
                 <form onSubmit={handleLogin}>
@@ -59,6 +60,12 @@ const Login = () => {
                     <button type="submit" className="btn btn-primary w-100">
                         Login
                     </button>
+                    <p className="mt-2 text-left">
+                        or <Link to="/register" className="link-secondary link-offset-2 link-underline-opacity-25 link-underline-opacity-50-hover">
+                        create</Link> account
+                    </p>
+                   <Link to="/forgot-password" className="link-secondary link-offset-2 link-underline-opacity-0 link-underline-opacity-25-hover">
+                       Forgot password?</Link>
                 </form>
             </div>
         </div>

@@ -7,3 +7,11 @@ npx nodemon server.js
 
 cd frontend
 npm start
+
+
+
+
+
+
+// done
+ openssl req -nodes -new -x509 -keyout ssl/server.key -out ssl/server.cert
