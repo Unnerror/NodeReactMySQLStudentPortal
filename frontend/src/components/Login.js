@@ -10,11 +10,13 @@ const Login = () => {
         e.preventDefault();
 
         try {
-            const response = await fetch("https://localhost:3443/login", {
+            const response = await fetch(`${process.env.REACT_APP_BACKEND_URL}/login`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ email, password }),
+                credentials: "include" // 👈 this is mandatory for sessions to work!
             });
+
 
             const data = await response.json();
 

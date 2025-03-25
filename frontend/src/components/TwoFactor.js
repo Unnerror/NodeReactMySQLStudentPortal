@@ -34,10 +34,11 @@ const TwoFactor = () => {
         setError("");
 
         try {
-            const res = await fetch("https://localhost:3443/verify-2fa", {
+            const res = await fetch(`${process.env.REACT_APP_BACKEND_URL}/verify-2fa`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ userId, code }),
+                credentials: "include" // 👈 this is mandatory for sessions to work!
             });
 
             const data = await res.json();
@@ -63,10 +64,11 @@ const TwoFactor = () => {
         setMessage("");
 
         try {
-            const res = await fetch("https://localhost:3443/resend-2fa", {
+            const res = await fetch(`${process.env.REACT_APP_BACKEND_URL}/resend-2fa`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ userId }), // ✅ sending only userId!
+                credentials: "include" // 👈 this is mandatory for sessions to work!
             });
 
             const data = await res.json();

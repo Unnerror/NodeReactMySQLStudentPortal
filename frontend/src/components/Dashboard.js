@@ -1,18 +1,34 @@
-import React from "react";
+import React, {useEffect} from "react";
+import { useAuth } from "../hooks/useAuth";
 import { useNavigate } from "react-router-dom";
 import 'bootstrap/dist/css/bootstrap.min.css';
 
 const Dashboard = () => {
+
     const navigate = useNavigate();
+    const { loading, isAuthenticated } = useAuth();
+
+    // ✅ Safe to call useEffect AFTER all hooks
+    useEffect(() => {
+        if (!loading && !isAuthenticated) {
+            navigate("/login");
+        }
+    }, [loading, isAuthenticated, navigate]);
+
+    // ✅ Don’t render UI while still checking auth
+    if (loading) return null;
 
     const handleEditProfile = () => {
         // Redirect to edit profile page (you can create this later)
         navigate('/profile');
     };
 
-    const handleSignOut = () => {
-        // Logic for logout (clear tokens, etc.), then navigate to home
-        navigate('/');
+    const handleSignOut = async () => {
+        await fetch(`${process.env.REACT_APP_BACKEND_URL}/logout`, {
+            method: "POST",
+            credentials: "include"
+        });
+        navigate('/login');
     };
 
     return (

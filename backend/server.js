@@ -7,6 +7,7 @@ const cors = require("cors");
 const bcrypt = require("bcryptjs");
 const nodemailer = require('nodemailer');
 const { v4: uuidv4 } = require('uuid');
+const session = require("express-session");
 
 const db = require("./db");
 
@@ -29,8 +30,27 @@ const sslOptions = {
 
 const app = express();
 
-app.use(cors());
+app.use(cors({
+    origin: process.env.REACT_APP_API_URL, // your frontend
+    credentials: true, // ✅ enable sending cookies
+}));
 app.use(express.json());
+
+// ✅ Sessions Hanlding
+app.use(session({
+    secret: process.env.SESSION_SECRET,
+    resave: false,
+    saveUninitialized: false,
+    cookie: {
+        secure: true,         // only over HTTPS
+        httpOnly: true,       // JS can't access
+        maxAge: 1000 * 60 * 60 // 1 hour
+    }
+}));
+const authRequired = require("./authMiddleware");
+app.get("/api/dashboard-data", authRequired, (req, res) => {
+    res.json({ message: "Welcome to your dashboard!", userId: req.session.userId });
+});
 
 // ✅ Validating email format from input
 const isValidEmail = (email) => {
@@ -178,7 +198,7 @@ app.post("/verify-2fa", (req, res) => {
                 "UPDATE users SET two_factor_code = NULL, two_factor_expires = NULL WHERE id = ?",
                 [userId]
             );
-
+            req.session.userId = user.id;
             res.json({ message: "2FA verified. Login successful!" });
         } else {
             res.status(400).json({ error: "Invalid or expired verification code." });
@@ -348,8 +368,16 @@ app.post("/reset-password", async (req, res) => {
     }
 });
 
+// ✅ Logout
+app.post("/logout", (req, res) => {
+    req.session.destroy((err) => {
+        if (err) return res.status(500).json({ error: "Logout failed" });
+        res.clearCookie("connect.sid");
+        res.json({ message: "Logged out" });
+    });
+});
+
 // Start Server
-//const PORT = process.env.PORT || 3001;
 https.createServer(sslOptions, app).listen(3443, () => {
     console.log('✅ HTTPS Server running on https://localhost:3443');
 });
