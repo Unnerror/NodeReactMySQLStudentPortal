@@ -10,8 +10,9 @@ const { v4: uuidv4 } = require('uuid');
 
 const db = require("./db");
 
-const secure = true;
+//const secure = true;
 
+// nodemailer
 const transporter = nodemailer.createTransport({
     service: 'gmail',
     auth: {
@@ -20,6 +21,7 @@ const transporter = nodemailer.createTransport({
     }
 });
 
+// certificats
 const sslOptions = {
     key: fs.readFileSync('./ssl/server.key'),
     cert: fs.readFileSync('./ssl/server.cert'),
@@ -35,26 +37,6 @@ const isValidEmail = (email) => {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     return emailRegex.test(email);
 };
-
-// Testing email sender
-/*
-app.get('/test-email', async (req, res) => {
-    try {
-        const info = await transporter.sendMail({
-            from: process.env.EMAIL_USER,
-            to: 'danilasergienko@gmail.com', // or another test email
-            subject: 'Test Email',
-            text: 'Hello! This is a test email from Student Portal 🚀'
-        });
-
-        console.log('Email sent:', info.response);
-        res.send('✅ Test email sent!');
-    } catch (error) {
-        console.error('Error sending email:', error);
-        res.status(500).send('❌ Failed to send test email.');
-    }
-});
-*/
 
 // ✅ Register New User
 app.post("/register", async (req, res) => {
@@ -81,7 +63,7 @@ app.post("/register", async (req, res) => {
     });
 });
 
-// ✅ Login with 2FA Email Code
+// ✅ Login + Sending 2FA
 app.post("/login", async (req, res) => {
     const { email, password } = req.body;
 
@@ -204,6 +186,66 @@ app.post("/verify-2fa", (req, res) => {
     });
 });
 
+// ✅ Resend 2FA Code
+app.post("/resend-2fa", async (req, res) => {
+    const { userId } = req.body;
+
+    if (!userId) {
+        return res.status(400).json({ error: "User ID is required" });
+    }
+
+    try {
+        // 1️⃣ Lookup the user to get their email
+        db.query("SELECT email FROM users WHERE id = ?", [userId], (err, result) => {
+            if (err) {
+                console.error(err);
+                return res.status(500).json({ error: "Database error finding user" });
+            }
+
+            if (result.length === 0) {
+                return res.status(404).json({ error: "User not found" });
+            }
+
+            const userEmail = result[0].email;
+
+            // 2️⃣ Generate new code + expiry
+            const code = Math.floor(100000 + Math.random() * 900000); // 6-digit
+            const expires = new Date(Date.now() + 10 * 60 * 1000); // 10 min expiry
+
+            // 3️⃣ Update DB with new code
+            db.query(
+                "UPDATE users SET two_factor_code = ?, two_factor_expires = ? WHERE id = ?",
+                [code, expires, userId],
+                (err, result) => {
+                    if (err) {
+                        console.error(err);
+                        return res.status(500).json({ error: "Database error updating 2FA" });
+                    }
+
+                    // 4️⃣ Send email
+                    transporter.sendMail({
+                        from: process.env.EMAIL_USER,
+                        to: userEmail, // ✅ pulled from DB!
+                        subject: "Your Login Verification Code",
+                        html: `<p>Your new login verification code is: <strong>${code}</strong></p>`,
+                    }, (error, info) => {
+                        if (error) {
+                            console.error(error);
+                            return res.status(500).json({ error: "Failed to send email" });
+                        }
+
+                        console.log("✅ Resent 2FA code to:", userEmail);
+                        res.json({ message: "2FA code resent successfully!" });
+                    });
+                }
+            );
+        });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ message: "Server error" });
+    }
+});
+
 // ✅ Forgot Password
 app.post("/forgot-password", async (req, res) => {
     const { email } = req.body;
@@ -307,8 +349,7 @@ app.post("/reset-password", async (req, res) => {
 });
 
 // Start Server
-const PORT = process.env.PORT || 3001;
-
+//const PORT = process.env.PORT || 3001;
 https.createServer(sslOptions, app).listen(3443, () => {
     console.log('✅ HTTPS Server running on https://localhost:3443');
 });
