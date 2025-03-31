@@ -1,9 +1,10 @@
 import React, { useState } from "react";
-import { Link } from 'react-router-dom';
+import {Link, useNavigate} from 'react-router-dom';
 
 const Register = () => {
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
+    const navigate = useNavigate();
 
     const handleRegister = async (e) => {
         e.preventDefault();
@@ -18,6 +19,7 @@ const Register = () => {
             const data = await response.json();
             if (response.ok) {
                 alert("Registration Successful: You can now log in.");
+                navigate("/login", { state: { userId: data.userId } });
             } else {
                 alert("Registration Failed: " + data.error);
             }

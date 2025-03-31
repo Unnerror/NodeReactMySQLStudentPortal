@@ -19,7 +19,7 @@ export const useAuth = () => {
                     navigate("/login");
                 }
             } catch (err) {
-                console.error("Auth check failed", err);
+                console.error("Auth check   failed", err);
                 navigate("/login");
             } finally {
                 setLoading(false);
