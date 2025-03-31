@@ -1,12 +1,15 @@
 import React, {useEffect} from "react";
 import { useAuth } from "../hooks/useAuth";
 import { useNavigate } from "react-router-dom";
+import AdminDashboard from "./AdminDashboard";
+import TeacherDashboard from "./TeacherDashboard";
+import StudentDashboard from "./StudentDashboard";
 import 'bootstrap/dist/css/bootstrap.min.css';
 
 const Dashboard = () => {
 
     const navigate = useNavigate();
-    const { loading, isAuthenticated } = useAuth();
+    const { loading, isAuthenticated, role } = useAuth();
 
     // ✅ Safe to call useEffect AFTER all hooks
     useEffect(() => {
@@ -15,8 +18,26 @@ const Dashboard = () => {
         }
     }, [loading, isAuthenticated, navigate]);
 
+    console.log("Role is ", role);
+
     // ✅ Don’t render UI while still checking auth
     if (loading) return null;
+
+
+    // 🔥 Render Role-Based Dashboard
+    const renderRoleDashboard = () => {
+        switch (role) {
+            case 1:
+                return <AdminDashboard />;
+            case 2:
+                return <TeacherDashboard />;
+            case 3:
+                return <StudentDashboard />;
+            default:
+                return <p>Invalid role.</p>;
+        }
+    };
+
 
     const handleEditProfile = () => {
         // Redirect to edit profile page (you can create this later)
@@ -54,11 +75,10 @@ const Dashboard = () => {
                 </div>
             </nav>
 
-            {/* Page Content */}
+            {/* Render Correct Role Dashboard */}
             <div className="container mt-5 text-center">
                 <h2>Dashboard</h2>
-                <p>Welcome to your dashboard!</p>
-                {/* Add more dashboard content here */}
+                {renderRoleDashboard()}
             </div>
         </div>
     );

@@ -8,10 +8,9 @@ const bcrypt = require("bcryptjs");
 const nodemailer = require('nodemailer');
 const { v4: uuidv4 } = require('uuid');
 const session = require("express-session");
+const authRequired = require("./authMiddleware");
 
 const db = require("./db");
-
-//const secure = true;
 
 // nodemailer
 const transporter = nodemailer.createTransport({
@@ -22,7 +21,7 @@ const transporter = nodemailer.createTransport({
     }
 });
 
-// certificats
+// certificates
 const sslOptions = {
     key: fs.readFileSync('./ssl/server.key'),
     cert: fs.readFileSync('./ssl/server.cert'),
@@ -34,6 +33,7 @@ app.use(cors({
     origin: process.env.REACT_APP_API_URL, // your frontend
     credentials: true, // ✅ enable sending cookies
 }));
+
 app.use(express.json());
 
 // ✅ Sessions Hanlding
@@ -47,10 +47,39 @@ app.use(session({
         maxAge: 1000 * 60 * 60 // 1 hour
     }
 }));
-const authRequired = require("./authMiddleware");
-app.get("/api/dashboard-data", authRequired, (req, res) => {
-    res.json({ message: "Welcome to your dashboard!", userId: req.session.userId });
+
+// ✅ More generic route for fetching user info after login
+app.get("/api/auth-user", authRequired([]), (req, res) => {
+    if (!req.session.userId) {
+        console.log("❌ No session found. Redirecting to login.");
+        return res.status(401).json({ error: "Unauthorized" });
+    }
+
+    console.log(`✅ Session found for user ID: ${req.session.userId}`);
+
+    // Continue fetching user data
+    const userId = req.session.userId;
+    db.query(
+        "SELECT email, role_id FROM users WHERE id = ?",
+        [userId],
+        (err, result) => {
+            if (err || result.length === 0) {
+                console.log("❌ Failed to fetch user data.");
+                return res.status(500).json({ error: "Failed to fetch user data" });
+            }
+
+            const { email, role_id } = result[0];
+            console.log(`✅ User found. Role ID: ${role_id}`);
+            res.json({
+                message: "User authenticated successfully!",
+                userId,
+                email,
+                role_id,
+            });
+        }
+    );
 });
+
 
 // ✅ Validating email format from input
 const isValidEmail = (email) => {
@@ -75,8 +104,8 @@ app.post("/register", async (req, res) => {
         // Hash password before storing
         const hashedPassword = await bcrypt.hash(password, 10);
 
-        // Insert new user
-        db.query("INSERT INTO users (email, password_hash) VALUES (?, ?)", [email, hashedPassword], (err, result) => {
+        // Insert new user with default role_id = 3 (student)
+        db.query("INSERT INTO users (email, password_hash, role_id) VALUES (?, ?, 3)", [email, hashedPassword], (err, result) => {
             if (err) return res.status(500).json({ error: "Database error" });
             res.status(201).json({ message: "User registered successfully" });
         });
@@ -134,48 +163,6 @@ app.post("/login", async (req, res) => {
         res.status(500).json({ error: "Server error" });
     }
 });
-/*app.post("/login", (req, res) => {
-    const { email, password } = req.body;
-
-    db.query("SELECT * FROM users WHERE email = ?", [email], async (err, result) => {
-        if (err) return res.status(500).json({ error: "Database error" });
-        if (result.length === 0) return res.status(401).json({ error: "Invalid email or password" });
-
-        const user = result[0];
-
-        const isMatch = await bcrypt.compare(password, user.password_hash);
-        if (!isMatch) return res.status(401).json({ error: "Invalid email or password" });
-
-        // Step 2: Generate 6-digit OTP
-        const verificationCode = Math.floor(100000 + Math.random() * 900000); // 6 digits
-        const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // expires in 10 mins
-
-        // Step 3: Save OTP & expiry in DB (You can also use a `user_verification_codes` table)
-        db.query(
-            "UPDATE users SET two_factor_code = ?, two_factor_expires = ? WHERE id = ?",
-            [verificationCode, expiresAt, user.id],
-            (err) => {
-                if (err) return res.status(500).json({ error: "Database error updating 2FA" });
-
-                // Step 4: Send the OTP via email
-                transporter.sendMail({
-                    from: process.env.EMAIL_USER,
-                    to: email,
-                    subject: "Your 2FA Login Code",
-                    text: `Your login verification code is: ${verificationCode}`
-                }, (error, info) => {
-                    if (error) {
-                        console.error("Error sending 2FA email:", error);
-                        return res.status(500).json({ message: "Failed to send verification email" });
-                    }
-
-                    res.json({ message: "Verification code sent to your email.", userId: user.id });
-                });
-            }
-        );
-    });
-});
-*/
 
 // ✅ Verify 2FA
 app.post("/verify-2fa", (req, res) => {
@@ -186,7 +173,6 @@ app.post("/verify-2fa", (req, res) => {
         if (result.length === 0) return res.status(404).json({ error: "User not found" });
 
         const user = result[0];
-
         const currentTime = new Date();
 
         if (
@@ -198,7 +184,11 @@ app.post("/verify-2fa", (req, res) => {
                 "UPDATE users SET two_factor_code = NULL, two_factor_expires = NULL WHERE id = ?",
                 [userId]
             );
+
+            // ✅ Set the session
             req.session.userId = user.id;
+            console.log(`✅ Session created for user ID: ${user.id}`);
+
             res.json({ message: "2FA verified. Login successful!" });
         } else {
             res.status(400).json({ error: "Invalid or expired verification code." });
@@ -376,6 +366,25 @@ app.post("/logout", (req, res) => {
         res.json({ message: "Logged out" });
     });
 });
+
+
+
+// ✅ Protect /api/admin with Admin Role Only (role_id = 1)
+app.get("/api/admin", authRequired([1]), (req, res) => {
+    res.json({ message: "Welcome Admin!" });
+});
+
+// ✅ Protect /api/teacher with Teacher & Admin Roles (role_id = 1, 2)
+app.get("/api/teacher", authRequired([2]), (req, res) => {
+    res.json({ message: "Welcome Teacher!" });
+});
+
+// ✅ Protect /api/student with All Roles (role_id = 1, 2, 3)
+app.get("/api/student", authRequired([3]), (req, res) => {
+    res.json({ message: "Welcome Student!" });
+});
+
+
 
 // Start Server
 https.createServer(sslOptions, app).listen(3443, () => {
