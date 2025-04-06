@@ -99,7 +99,6 @@ const Dashboard = () => {
                     {role === 2 && (
                         <>
                             <button className="btn btn-primary" onClick={() => setActiveTab("myCourses")}>My Courses</button>
-                            <button className="btn btn-secondary" onClick={() => setActiveTab("viewStudents")}>View Enrolled Students</button>
                             <button className="btn btn-outline-dark" onClick={() => setActiveTab("search")}>Search Courses</button>
                         </>
                     )}

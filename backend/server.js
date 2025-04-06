@@ -697,6 +697,48 @@ app.delete("/api/admin/users/:id", authRequired([1]), (req, res) => {
     });
 });
 
+// TEACHER
+// ✅ Get courses where current teacher is assigned
+app.get("/api/teacher/my-courses", authRequired([2]), (req, res) => {
+    const teacherId = req.query.teacherId;
+
+    const sql = `
+        SELECT c.id, c.title, c.description,
+            (SELECT COUNT(*) FROM enrollments e WHERE e.course_id = c.id) AS enrolled_students
+        FROM courses c
+        WHERE c.teacher_id = ?
+    `;
+
+    db.query(sql, [teacherId], (err, results) => {
+        if (err) {
+            console.error("❌ Failed to fetch teacher's courses:", err);
+            return res.status(500).json({ error: "Failed to fetch teacher's courses" });
+        }
+        res.json(results);
+    });
+});
+
+// Student
+// ✅ Get courses where current student is enrolled
+app.get("/api/student/enrollments", authRequired([3]), (req, res) => {
+    const studentId = req.session.userId;
+
+    const sql = `
+        SELECT c.id, c.title, c.description, u.email AS teacher_email
+        FROM enrollments e
+        JOIN courses c ON e.course_id = c.id
+        LEFT JOIN users u ON c.teacher_id = u.id
+        WHERE e.student_id = ?
+    `;
+
+    db.query(sql, [studentId], (err, results) => {
+        if (err) {
+            console.error("❌ Failed to fetch enrolled courses:", err);
+            return res.status(500).json({ error: "Failed to fetch enrolled courses" });
+        }
+        res.json(results);
+    });
+});
 
 
 //--------------------------------
