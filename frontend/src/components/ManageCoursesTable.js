@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import StudentManager from "./StudentManager";
 
-const CoursesTable = () => {
+const ManageCoursesTable = () => {
     const [courses, setCourses] = useState([]);
     const [teachers, setTeachers] = useState([]);
     const [newCourse, setNewCourse] = useState({
@@ -10,10 +10,12 @@ const CoursesTable = () => {
         teacher_id: ""
     });
     const [managingCourseId, setManagingCourseId] = useState(null);
+    const [enrollmentCounts, setEnrollmentCounts] = useState({});
 
     useEffect(() => {
         fetchCourses();
         fetchTeachers();
+        fetchEnrollmentCounts();
     }, []);
 
     const fetchCourses = async () => {
@@ -136,6 +138,9 @@ const CoursesTable = () => {
                 </select>
             </td>
             <td>
+                {course.id ? enrollmentCounts[course.id] || 0 : ""}
+            </td>
+            <td>
                 <button className="btn btn-success" onClick={() => handleSave(course)}>
                     Save
                 </button>
@@ -160,6 +165,16 @@ const CoursesTable = () => {
         </tr>
     );
 
+    const fetchEnrollmentCounts = async () => {
+        const res = await fetch("https://localhost:3443/api/admin/course-enrollments-count", { credentials: "include" });
+        const data = await res.json();
+        const mapped = {};
+        data.forEach((item) => {
+            mapped[item.course_id] = item.count;
+        });
+        setEnrollmentCounts(mapped); // { 1: 5, 2: 0, ... }
+    };
+
     return (
         <div>
             <h4 className="mb-3">All Courses</h4>
@@ -170,6 +185,7 @@ const CoursesTable = () => {
                     <th>Title</th>
                     <th>Description</th>
                     <th>Teacher</th>
+                    <th>Enrolled</th>
                     <th>Save</th>
                     <th>Delete</th>
                     <th>Students</th>
@@ -190,4 +206,4 @@ const CoursesTable = () => {
     );
 };
 
-export default CoursesTable;
+export default ManageCoursesTable;

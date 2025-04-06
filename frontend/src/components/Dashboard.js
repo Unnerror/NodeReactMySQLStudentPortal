@@ -3,7 +3,7 @@ import { useAuth } from "../hooks/useAuth";
 import { useNavigate } from "react-router-dom";
 import 'bootstrap/dist/css/bootstrap.min.css';
 
-import CoursesTable from "./CoursesTable";
+import ManageCoursesTable from "./ManageCoursesTable";
 import ManageUsersTable from "./ManageUsersTable";
 import MyCoursesTable from "./MyCoursesTable";
 import EnrolledStudentsTable from "./EnrolledStudentsTable";
@@ -33,7 +33,7 @@ const Dashboard = () => {
     const renderTable = () => {
         switch (activeTab) {
             case "allCourses":
-                return <CoursesTable isAdmin={true} />;
+                return <ManageCoursesTable isAdmin={true} />;
             case "manageUsers":
                 return <ManageUsersTable />;
             case "myCourses":

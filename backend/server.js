@@ -394,12 +394,12 @@ app.get("/api/admin", authRequired([1]), (req, res) => {
     res.json({ message: "Welcome Admin!" });
 });
 
-// ✅ Protect /api/teacher with Teacher & Admin Roles (role_id = 1, 2)
+// ✅ Protect /api/teacher with Teacher & Admin Roles (role_id = 2)
 app.get("/api/teacher", authRequired([2]), (req, res) => {
     res.json({ message: "Welcome Teacher!" });
 });
 
-// ✅ Protect /api/student with All Roles (role_id = 1, 2, 3)
+// ✅ Protect /api/student with All Roles (role_id = 3)
 app.get("/api/student", authRequired([3]), (req, res) => {
     res.json({ message: "Welcome Student!" });
 });
@@ -409,7 +409,8 @@ app.get("/api/student", authRequired([3]), (req, res) => {
 //--------------------------------
 // Courses and Roles management
 //--------------------------------
-// Courses
+
+
 // Available for all users
 // ✅ Get all available courses
 app.get("/api/courses", authRequired([1, 2, 3]), (req, res) => {
@@ -423,6 +424,38 @@ app.get("/api/courses", authRequired([1, 2, 3]), (req, res) => {
     });
 });
 
+// ✅ Courses search
+app.get("/api/courses/search", authRequired([1, 2, 3]), (req, res) => {
+    const search = `%${req.query.query || ""}%`;
+
+    const sql = `
+        SELECT 
+            c.id AS course_id,
+            c.title AS course_name,
+            c.description AS course_desc,
+            u.email AS teacher_email,
+            COUNT(e.student_id) AS enrolled_count
+        FROM courses c
+        LEFT JOIN users u ON c.teacher_id = u.id
+        LEFT JOIN enrollments e ON c.id = e.course_id
+        WHERE c.title LIKE ? OR u.email LIKE ?
+        GROUP BY c.id
+        ORDER BY c.id
+    `;
+
+    db.query(sql, [search, search], (err, results) => {
+        if (err) {
+            console.error("❌ Failed to search courses:", err);
+            return res.status(500).json({ error: "Failed to fetch courses" });
+        }
+        res.json(results);
+    });
+});
+
+
+
+// ADMIN
+// Courses management
 // ✅ Get all courses with optional teacher name
 app.get("/api/admin/courses", authRequired([1]), (req, res) => {
     const sql = `
@@ -497,22 +530,46 @@ app.put("/api/admin/courses/:id", authRequired([1]), (req, res) => {
     });
 });
 
-// ✅ Delete course
+// ✅ Delete course (with cleanup)
 app.delete("/api/admin/courses/:id", authRequired([1]), (req, res) => {
     const courseId = req.params.id;
 
-    db.query("DELETE FROM courses WHERE id = ?", [courseId], (err, result) => {
+    // First, remove all enrollments referencing the course
+    db.query("DELETE FROM enrollments WHERE course_id = ?", [courseId], (err) => {
         if (err) {
-            console.error("❌ Error deleting course:", err);
-            return res.status(500).json({ error: "Failed to delete course" });
+            console.error("❌ Failed to delete enrollments for course:", err);
+            return res.status(500).json({ error: "Failed to clean up enrollments" });
         }
 
-        res.json({ message: "Course deleted successfully" });
+        // Then delete the course
+        db.query("DELETE FROM courses WHERE id = ?", [courseId], (err) => {
+            if (err) {
+                console.error("❌ Error deleting course:", err);
+                return res.status(500).json({ error: "Failed to delete course" });
+            }
+
+            res.json({ message: "Course deleted successfully" });
+        });
     });
 });
 
+// ✅ Get course enrollments count
+app.get("/api/admin/course-enrollments-count", authRequired([1]), (req, res) => {
+    const sql = `
+        SELECT course_id, COUNT(*) AS count
+        FROM enrollments
+        GROUP BY course_id
+    `;
+    db.query(sql, (err, results) => {
+        if (err) {
+            console.error("❌ Failed to fetch enrollment counts", err);
+            return res.status(500).json({ error: "Failed to fetch enrollments" });
+        }
+        res.json(results); // [{ course_id: 1, count: 5 }, ...]
+    });
+});
 
-// Students
+// Students management
 // Get all students
 app.get("/api/admin/students", authRequired([1]), (req, res) => {
     db.query("SELECT id, email FROM users WHERE role_id = 3", (err, results) => {
@@ -562,6 +619,84 @@ app.delete("/api/admin/courses/:courseId/students/:studentId", authRequired([1])
         }
     );
 });
+
+// Users management
+// Get all users with roles
+app.get("/api/admin/users", authRequired([1]), (req, res) => {
+    const sql = `
+        SELECT u.id, u.email, u.role_id, r.role_name AS role_name
+        FROM users u
+                 LEFT JOIN roles r ON u.role_id = r.id
+    `;
+    db.query(sql, (err, results) => {
+        if (err) {
+            console.error("❌ Error fetching users:", err);
+            return res.status(500).json({ error: "Failed to fetch users" });
+        }
+        res.json(results);
+    });
+});
+
+// Get all roles
+app.get("/api/admin/roles", authRequired([1]), (req, res) => {
+    db.query("SELECT id, role_name FROM roles", (err, results) => {
+        if (err) {
+            console.error("❌ Failed to fetch roles:", err);
+            return res.status(500).json({ error: "Failed to fetch roles" });
+        }
+        res.json(results);
+    });
+});
+
+// Create user
+/*
+app.post("/api/admin/users", authRequired([1]), (req, res) => {
+    const { email, role_id } = req.body;
+
+    if (!email || !role_id) {
+        return res.status(400).json({ error: "Email and role_id are required" });
+    }
+
+    db.query("INSERT INTO users (email, role_id) VALUES (?, ?)", [email, role_id], (err, result) => {
+        if (err) {
+            console.error("❌ Failed to create user:", err);
+            return res.status(500).json({ error: "Failed to create user" });
+        }
+        res.status(201).json({ message: "User created", userId: result.insertId });
+    });
+});
+*/
+
+// Update user
+app.put("/api/admin/users", authRequired([1]), (req, res) => {
+    const { id, email, role_id } = req.body;
+
+    if (!id || !email || !role_id) {
+        return res.status(400).json({ error: "ID, email and role_id are required" });
+    }
+
+    db.query("UPDATE users SET email = ?, role_id = ? WHERE id = ?", [email, role_id, id], (err) => {
+        if (err) {
+            console.error("❌ Failed to update user:", err);
+            return res.status(500).json({ error: "Failed to update user" });
+        }
+        res.json({ message: "User updated" });
+    });
+});
+
+// Delete user
+app.delete("/api/admin/users/:id", authRequired([1]), (req, res) => {
+    const userId = req.params.id;
+
+    db.query("DELETE FROM users WHERE id = ?", [userId], (err) => {
+        if (err) {
+            console.error("❌ Failed to delete user:", err);
+            return res.status(500).json({ error: "Failed to delete user" });
+        }
+        res.json({ message: "User deleted" });
+    });
+});
+
 
 
 //--------------------------------
