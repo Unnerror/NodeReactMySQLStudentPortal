@@ -5,7 +5,10 @@ import { useNavigate } from "react-router-dom";
 export const useAuth = () => {
     const [loading, setLoading] = useState(true);
     const [isAuthenticated, setIsAuthenticated] = useState(false);
-    const [role, setRole] = useState(null); // 👈 Add role state
+    const [role, setRole] = useState(null);
+    const [userId, setUserId] = useState(null);
+    const [email, setEmail] = useState(null);
+
     const navigate = useNavigate();
 
     useEffect(() => {
@@ -20,7 +23,11 @@ export const useAuth = () => {
                     console.log("Auth User Data:", data); // ✅ Debug API response here
 
                     setIsAuthenticated(true);
-                    setRole(data.role_id); // ✅ Store role in state
+                    setRole(data.role_id);
+                    setUserId(data.userId);
+                    setEmail(data.email);
+
+
                 } else {
                     navigate("/login");
                 }
@@ -35,5 +42,5 @@ export const useAuth = () => {
         checkAuth();
     }, [navigate]);
 
-    return { loading, isAuthenticated, role };
+    return { loading, isAuthenticated, role, userId, email };
 };

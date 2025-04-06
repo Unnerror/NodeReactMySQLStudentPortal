@@ -1,5 +1,4 @@
 require("dotenv").config();
-
 const https = require('https');
 const fs = require('fs');
 const express = require("express");
@@ -9,9 +8,13 @@ const nodemailer = require('nodemailer');
 const { v4: uuidv4 } = require('uuid');
 const session = require("express-session");
 const authRequired = require("./authMiddleware");
-
 const db = require("./db");
 
+
+
+//--------------------------------
+// Email service
+//--------------------------------
 // nodemailer
 const transporter = nodemailer.createTransport({
     service: 'gmail',
@@ -21,6 +24,11 @@ const transporter = nodemailer.createTransport({
     }
 });
 
+
+
+//--------------------------------
+// HTTPS
+//--------------------------------
 // certificates
 const sslOptions = {
     key: fs.readFileSync('./ssl/server.key'),
@@ -29,11 +37,16 @@ const sslOptions = {
 
 const app = express();
 
+
+
+//--------------------------------
+// Session Manager
+//--------------------------------
+// Using cookies
 app.use(cors({
     origin: process.env.REACT_APP_API_URL, // your frontend
     credentials: true, // ✅ enable sending cookies
 }));
-
 app.use(express.json());
 
 // ✅ Sessions Hanlding
@@ -48,7 +61,7 @@ app.use(session({
     }
 }));
 
-// ✅ More generic route for fetching user info after login
+// ✅ Route for fetching user info after login
 app.get("/api/auth-user", authRequired([]), (req, res) => {
     if (!req.session.userId) {
         console.log("❌ No session found. Redirecting to login.");
@@ -81,6 +94,10 @@ app.get("/api/auth-user", authRequired([]), (req, res) => {
 });
 
 
+
+//--------------------------------
+// Register, Login, Logout
+//--------------------------------
 // ✅ Validating email format from input
 const isValidEmail = (email) => {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -369,6 +386,9 @@ app.post("/logout", (req, res) => {
 
 
 
+//--------------------------------
+// Roots for Roles
+//--------------------------------
 // ✅ Protect /api/admin with Admin Role Only (role_id = 1)
 app.get("/api/admin", authRequired([1]), (req, res) => {
     res.json({ message: "Welcome Admin!" });
@@ -386,7 +406,167 @@ app.get("/api/student", authRequired([3]), (req, res) => {
 
 
 
+//--------------------------------
+// Courses and Roles management
+//--------------------------------
+// Courses
+// Available for all users
+// ✅ Get all available courses
+app.get("/api/courses", authRequired([1, 2, 3]), (req, res) => {
+    db.query("SELECT id, title, description FROM courses", (err, results) => {
+        if (err) {
+            console.error("❌ Error fetching courses:", err);
+            return res.status(500).json({ error: "Failed to fetch courses" });
+        }
+
+        res.json({ courses: results });
+    });
+});
+
+// ✅ Get all courses with optional teacher name
+app.get("/api/admin/courses", authRequired([1]), (req, res) => {
+    const sql = `
+        SELECT c.id, c.title, c.description, u.id AS teacher_id, u.email AS teacher_email
+        FROM courses c
+        LEFT JOIN users u ON c.teacher_id = u.id
+    `;
+    db.query(sql, (err, results) => {
+        if (err) return res.status(500).json({ error: "Failed to fetch courses" });
+        res.json(results);
+    });
+});
+
+// ✅ Get all teachers (for dropdown)
+app.get("/api/admin/teachers", authRequired([1]), (req, res) => {
+    db.query("SELECT id, email FROM users WHERE role_id = 2", (err, results) => {
+        if (err) return res.status(500).json({ error: "Failed to fetch teachers" });
+        res.json(results);
+    });
+});
+
+// ✅ Add or update course
+app.post("/api/admin/courses", authRequired([1]), (req, res) => {
+    const { title, description, teacher_id } = req.body;
+
+    if (!title || !description) {
+        return res.status(400).json({ error: "Title and description are required" });
+    }
+
+    const query = teacher_id
+        ? "INSERT INTO courses (title, description, teacher_id) VALUES (?, ?, ?)"
+        : "INSERT INTO courses (title, description) VALUES (?, ?)";
+
+    const params = teacher_id ? [title, description, teacher_id] : [title, description];
+
+    db.query(query, params, (err, result) => {
+        if (err) {
+            console.error("❌ Failed to insert course:", err);
+            return res.status(500).json({ error: "Failed to add course" });
+        }
+
+        console.log("✅ Course added successfully");
+        res.status(201).json({ message: "Course added" });
+    });
+});
+
+// ✅ Update course
+app.put("/api/admin/courses/:id", authRequired([1]), (req, res) => {
+    const courseId = req.params.id;
+    const { title, description, teacher_id } = req.body;
+
+    if (!title || !description) {
+        return res.status(400).json({ error: "Title and description are required" });
+    }
+
+    const query = teacher_id
+        ? "UPDATE courses SET title = ?, description = ?, teacher_id = ? WHERE id = ?"
+        : "UPDATE courses SET title = ?, description = ?, teacher_id = NULL WHERE id = ?";
+
+    const params = teacher_id
+        ? [title, description, teacher_id, courseId]
+        : [title, description, courseId];
+
+    db.query(query, params, (err, result) => {
+        if (err) {
+            console.error("❌ Failed to update course:", err);
+            return res.status(500).json({ error: "Failed to update course" });
+        }
+
+        console.log(`✅ Course ${courseId} updated`);
+        res.json({ message: "Course updated" });
+    });
+});
+
+// ✅ Delete course
+app.delete("/api/admin/courses/:id", authRequired([1]), (req, res) => {
+    const courseId = req.params.id;
+
+    db.query("DELETE FROM courses WHERE id = ?", [courseId], (err, result) => {
+        if (err) {
+            console.error("❌ Error deleting course:", err);
+            return res.status(500).json({ error: "Failed to delete course" });
+        }
+
+        res.json({ message: "Course deleted successfully" });
+    });
+});
+
+
+// Students
+// Get all students
+app.get("/api/admin/students", authRequired([1]), (req, res) => {
+    db.query("SELECT id, email FROM users WHERE role_id = 3", (err, results) => {
+        if (err) return res.status(500).json({ error: "Failed to fetch students" });
+        res.json(results);
+    });
+});
+
+// Get enrolled students for a course
+app.get("/api/admin/courses/:id/students", authRequired([1]), (req, res) => {
+    const courseId = req.params.id;
+    db.query(
+        `SELECT u.id, u.email FROM users u
+         JOIN enrollments ce ON u.id = ce.student_id
+         WHERE ce.course_id = ?`,
+        [courseId],
+        (err, results) => {
+            if (err) return res.status(500).json({ error: "Failed to fetch enrolled students" });
+            res.json(results);
+        }
+    );
+});
+
+// Add student to course
+app.post("/api/admin/courses/:id/students", authRequired([1]), (req, res) => {
+    const courseId = req.params.id;
+    const { studentId } = req.body;
+    db.query(
+        "INSERT INTO enrollments (course_id, student_id) VALUES (?, ?)",
+        [courseId, studentId],
+        (err) => {
+            if (err) return res.status(500).json({ error: "Failed to enroll student" });
+            res.status(201).json({ message: "Student enrolled" });
+        }
+    );
+});
+
+// Remove student from course
+app.delete("/api/admin/courses/:courseId/students/:studentId", authRequired([1]), (req, res) => {
+    const { courseId, studentId } = req.params;
+    db.query(
+        "DELETE FROM enrollments WHERE course_id = ? AND student_id = ?",
+        [courseId, studentId],
+        (err) => {
+            if (err) return res.status(500).json({ error: "Failed to remove student" });
+            res.json({ message: "Student removed" });
+        }
+    );
+});
+
+
+//--------------------------------
 // Start Server
+//--------------------------------
 https.createServer(sslOptions, app).listen(3443, () => {
     console.log('✅ HTTPS Server running on https://localhost:3443');
 });

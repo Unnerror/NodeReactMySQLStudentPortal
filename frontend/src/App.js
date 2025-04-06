@@ -9,11 +9,9 @@ import ForgotPassword from "./components/ForgotPassword";
 import ResetPassword from "./components/ResetPassword";
 import TwoFactor from "./components/TwoFactor";
 import ManageCourses from "./components/ManageCourses"; // ✅ Future admin route
-import ManageUsers from "./components/ManageUsers"; // ✅ Future admin route
 import MyCourses from "./components/MyCourses"; // ✅ Teacher route
 import ViewStudents from "./components/ViewStudents"; // ✅ Teacher route
 import EnrollCourses from "./components/EnrollCourses"; // ✅ Student route
-import MyProgress from "./components/MyProgress"; // ✅ Student route
 
 // Create a wrapper to use hooks like useLocation in App.js
 const AppWrapper = () => {
@@ -59,7 +57,6 @@ const App = () => {
 
                 {/* Future Routes for Admin */}
                 <Route path="/manage-courses" element={<ManageCourses />} />
-                <Route path="/manage-users" element={<ManageUsers />} />
 
                 {/* Future Routes for Teacher */}
                 <Route path="/my-courses" element={<MyCourses />} />
@@ -67,7 +64,6 @@ const App = () => {
 
                 {/* Future Routes for Student */}
                 <Route path="/enroll-courses" element={<EnrollCourses />} />
-                <Route path="/my-progress" element={<MyProgress />} />
             </Routes>
         </div>
     );
