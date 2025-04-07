@@ -181,6 +181,34 @@ app.post("/login", async (req, res) => {
     }
 });
 
+// ⚠️ UNSAFE LOGIN - SQL Injection vulnerable
+app.post("/api/vuln-login", (req, res) => {
+    const { email, password } = req.body;
+
+    const sql = `SELECT * FROM users WHERE email = '${email}' AND password_hash = '${password}'`;
+    // SELECT * FROM users WHERE email = '' OR 1=1 --  AND password_hash = 'qwer'
+    db.query(sql, (err, results) => {
+        if (err) {
+            console.error("❌ SQL Error:", err);
+            return res.status(500).json({ error: "Internal error" });
+        }
+
+        if (results.length > 0) {
+            // Simulate login success by creating a session
+            req.session.userId = results[0].id;
+            req.session.roleId = results[0].role_id;
+            return res.json({ message: "Vulnerable login success" });
+        }
+
+        res.status(401).json({ error: "Login failed" });
+    });
+});
+
+/*
+' OR 1=1 --
+qwer
+*/
+
 // ✅ Verify 2FA
 app.post("/verify-2fa", (req, res) => {
     const { userId, code } = req.body;
@@ -409,8 +437,6 @@ app.get("/api/student", authRequired([3]), (req, res) => {
 //--------------------------------
 // Courses and Roles management
 //--------------------------------
-
-
 // Available for all users
 // ✅ Get all available courses
 app.get("/api/courses", authRequired([1, 2, 3]), (req, res) => {
@@ -451,6 +477,84 @@ app.get("/api/courses/search", authRequired([1, 2, 3]), (req, res) => {
         res.json(results);
     });
 });
+
+
+
+
+// ⚠️ Search - fully injectable & renders raw output
+app.get("/api/vuln-courses/search", (req, res) => {
+    const query = req.query.q || '';
+
+    // removed GROUP BY and COUNT for now (vulnerable version only)
+    const sql = `
+        SELECT 
+            courses.id, 
+            courses.title, 
+            courses.description, 
+            users.email AS teacher_email,
+            0 AS enrolled_count
+        FROM courses
+        LEFT JOIN users ON users.id = courses.teacher_id
+        WHERE courses.title LIKE '%${query}%' OR users.email LIKE '%${query}%'
+    `;
+
+    db.query(sql, (err, results) => {
+        if (err) {
+            console.error("❌ Vulnerable Search SQL Error:", err);
+            return res.status(500).json({ error: "Query failed" });
+        }
+        res.json(results);
+    });
+});
+/*
+// https://localhost:3000/vuln-search
+/*
+' ORDER BY 1 --
+' UNION SELECT 1,2,3,4,5 --
+' UNION SELECT 0, 'text', 'text', 'text', 0 --
+' UNION SELECT 0, email, password_hash, 'text', 0 FROM users --
+*/
+/*
+// ⚠️ UNSAFE COURSE SEARCH - UNION SQL Injection vulnerable
+app.get("/api/vuln-courses/search", (req, res) => {
+    const { query } = req.query;
+
+    // If no query provided, return all courses (safe)
+    if (!query) {
+        const sql = `
+            SELECT c.id, c.title, c.description, u.email AS teacher_email,
+                (SELECT COUNT(*) FROM enrollments e WHERE e.course_id = c.id) AS enrolled_students
+            FROM courses c
+            LEFT JOIN users u ON c.teacher_id = u.id
+        `;
+        return db.query(sql, (err, results) => {
+            if (err) {
+                console.error("❌ Error fetching courses:", err);
+                return res.status(500).json({ error: "Failed to fetch courses" });
+            }
+            res.json(results);
+        });
+    }
+
+    // ⚠️ UNSAFE version with direct interpolation into SQL (vulnerable to UNION attacks)
+    const unsafeQuery = `
+        SELECT c.id, c.title, c.description, u.email AS teacher_email,
+               (SELECT COUNT(*) FROM enrollments e WHERE e.course_id = c.id) AS enrolled_students
+        FROM courses c
+                 LEFT JOIN users u ON c.teacher_id = u.id
+        WHERE c.title LIKE '%${query}%' OR u.email LIKE '%${query}%'
+    `;
+
+    db.query(unsafeQuery, (err, results) => {
+        if (err) {
+            console.error("❌ Vulnerable Search Error:", err);
+            return res.status(500).json({ error: "Internal error" });
+        }
+        res.json(results);
+    });
+});
+*/
+
 
 
 
@@ -697,6 +801,7 @@ app.delete("/api/admin/users/:id", authRequired([1]), (req, res) => {
     });
 });
 
+
 // TEACHER
 // ✅ Get courses where current teacher is assigned
 app.get("/api/teacher/my-courses", authRequired([2]), (req, res) => {
@@ -718,7 +823,8 @@ app.get("/api/teacher/my-courses", authRequired([2]), (req, res) => {
     });
 });
 
-// Student
+
+// STUDENT
 // ✅ Get courses where current student is enrolled
 app.get("/api/student/enrollments", authRequired([3]), (req, res) => {
     const studentId = req.session.userId;

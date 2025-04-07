@@ -8,6 +8,9 @@ import Dashboard from "./components/Dashboard";
 import ForgotPassword from "./components/ForgotPassword";
 import ResetPassword from "./components/ResetPassword";
 import TwoFactor from "./components/TwoFactor";
+import VulnLogin from "./components/VulnLogin";
+import VulnSearchCourses from "./components/VulnSearchCourses";
+
 
 // Create a wrapper to use hooks like useLocation in App.js
 const AppWrapper = () => {
@@ -42,7 +45,6 @@ const App = () => {
                     </div>
                 </div>
             )}
-
             <Routes>
                 <Route path="/login" element={<Login />} />
                 <Route path="/two-factor" element={<TwoFactor />} />
@@ -50,6 +52,8 @@ const App = () => {
                 <Route path="/dashboard" element={<Dashboard />} />
                 <Route path="/forgot-password" element={<ForgotPassword />} />
                 <Route path="/reset-password" element={<ResetPassword />} />
+                <Route path="/vuln-login" element={<VulnLogin />} />
+                <Route path="/vuln-search" element={<VulnSearchCourses />} />
             </Routes>
         </div>
     );
